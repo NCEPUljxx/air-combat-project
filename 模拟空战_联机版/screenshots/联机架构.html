@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { margin: 30px auto; max-width: 1100px; font-family: "Microsoft YaHei", sans-serif; background: #fff; }
+  h2 { text-align: center; margin-bottom: 24px; }
+  .mermaid { text-align: center; }
+  .err { color: #c00; text-align: center; padding: 40px; display: none; }
+</style>
+</head>
+<body>
+<h2>图2：联机模式整体部署架构</h2>
+<div class="mermaid">
+graph TB
+    subgraph 浏览器A["浏览器 A（玩家1）"]
+        A1["Vue 3 前端"]
+        A2["OnlineGameController / WS 输入泵"]
+        A3["BattleCanvas / Canvas 渲染"]
+    end
+
+    subgraph 浏览器B["浏览器 B（玩家2）"]
+        B1["Vue 3 前端"]
+        B2["OnlineGameController / WS 输入泵"]
+        B3["BattleCanvas / Canvas 渲染"]
+    end
+
+    subgraph Spring["Spring Boot 3 后端 :8080"]
+        direction TB
+        REST["REST Controller / Auth · Room · Battle"]
+        WSH["GameWebSocketHandler / /ws/game"]
+        OGS["OnlineGameService / tick调度 · RoomRuntime · 权威计算"]
+        subgraph 线程池["线程池"]
+            GTE["gameTaskExecutor / 核心4 最大8 队列200"]
+            CTE["calculationTaskExecutor / 核心4 最大8 队列400"]
+        end
+        TICK["tickScheduler / 单线程守护 120Hz"]
+    end
+
+    subgraph DB["MySQL :3306"]
+        direction LR
+        T1["users"]
+        T2["rooms"]
+        T3["room_players"]
+        T4["battle_records"]
+        T5["battle_player_results"]
+    end
+
+    A1 -->|"HTTP REST"| REST
+    B1 -->|"HTTP REST"| REST
+    A2 -->|"WS MSG_PLAYER_INPUT"| WSH
+    B2 -->|"WS MSG_PLAYER_INPUT"| WSH
+    WSH -->|"MSG_BATTLE_STATUS"| A2
+    WSH -->|"MSG_BATTLE_STATUS"| B2
+    WSH --> OGS
+    OGS -->|"dispatch"| TICK
+    OGS -->|"execute tick"| GTE
+    OGS -->|"AI/碰撞异步"| CTE
+    REST -->|"MyBatis"| DB
+    OGS -->|"saveBattleRecord"| DB
+    A2 --> A3
+    B2 --> B3
+</div>
+<div class="err" id="err">图表加载失败，请检查网络连接后刷新页面</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({ startOnLoad: false, theme: 'default' });
+mermaid.run();
+</script>
+</body>
+</html>

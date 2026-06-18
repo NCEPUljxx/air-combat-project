@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { margin: 30px auto; max-width: 1100px; font-family: "Microsoft YaHei", sans-serif; background: #fff; }
+  h2 { text-align: center; margin-bottom: 24px; }
+  .mermaid { text-align: center; }
+  .err { color: #c00; text-align: center; padding: 40px; display: none; }
+</style>
+</head>
+<body>
+<h2>图3：联机数据流（典型一帧）</h2>
+<div class="mermaid">
+sequenceDiagram
+    autonumber
+
+    participant Browser as 浏览器<br/>OnlineGameController
+
+    box rgba(200,220,255,0.3) Spring Boot 后端
+        participant WS as GameWebSocketHandler
+        participant SVC as OnlineGameService
+        participant TICK as tickScheduler
+        participant GAME as gameTaskExecutor
+        participant CALC as calculationTaskExecutor
+    end
+
+    participant DB as MySQL
+
+    Note over Browser: 采样键盘/鼠标 → InputCommand
+
+    Browser->>WS: MSG_PLAYER_INPUT
+    WS->>SVC: handleClientMessage
+
+    rect rgba(255,240,200,0.4)
+        Note over SVC: 存入 latestInputs + pending意图
+
+        Note over TICK,GAME: 每 1/120s 触发
+        TICK->>SVC: dispatchTicks
+        SVC->>GAME: execute tick(runtime)
+
+        rect rgba(200,255,200,0.3)
+            Note over GAME: synchronized(runtime)
+
+            GAME->>GAME: stepAiNoseForAiFighters
+
+            par 异步计算
+                GAME->>CALC: buildAiCommands
+            and
+                GAME->>CALC: detectHits
+            and
+                GAME->>CALC: scanRadarMarks
+            end
+
+            CALC-->>GAME: AI InputCommand
+            CALC-->>GAME: HitCandidate 列表
+            CALC-->>GAME: RadarMark 列表
+
+            GAME->>GAME: AWACS 跟随友军重心
+            GAME->>GAME: applyMove / 武器发射
+            GAME->>GAME: steerMissile 导弹追踪
+            GAME->>GAME: bomb tick 炸弹AOE
+            GAME->>GAME: detectFighterCollisions
+            GAME->>GAME: toSnapshot 组装快照
+
+            GAME->>DB: saveBattleRecord（仅结束时）
+        end
+
+        SVC->>WS: broadcast MSG_BATTLE_STATUS
+
+        opt 导弹发射
+            SVC->>WS: broadcast MSG_MISSILE_LAUNCH
+        end
+        opt 命中结果
+            SVC->>WS: broadcast MSG_HIT_RESULT
+        end
+    end
+
+    WS->>Browser: MSG_BATTLE_STATUS (BattleSnapshot)
+
+    Note over Browser: normalizeBattleSnapshot → render
+</div>
+<div class="err" id="err">图表加载失败，请检查网络连接后刷新页面</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({ startOnLoad: false, theme: 'default' });
+mermaid.run();
+</script>
+</body>
+</html>

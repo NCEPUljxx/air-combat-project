@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>模拟空战 · 架构模型与逻辑图</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0c1222;
+      --panel: #141d33;
+      --text: #e8eef8;
+      --muted: #8b9bb8;
+      --accent: #3d8bfd;
+      --border: #243556;
+      --hud: #0d1a0d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    header {
+      padding: 2rem 1.5rem 1.5rem;
+      background: linear-gradient(165deg, #0f1828 0%, #0c1222 45%, #0a1520 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.65rem;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+    }
+    header p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 48rem;
+      font-size: 0.95rem;
+    }
+    nav {
+      padding: 0.75rem 1.5rem;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      align-items: center;
+    }
+    nav a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.88rem;
+    }
+    nav a:hover { text-decoration: underline; }
+    main {
+      max-width: 56rem;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem 3rem;
+    }
+    section {
+      margin-bottom: 2.75rem;
+    }
+    section h2 {
+      margin: 0 0 0.6rem;
+      font-size: 1.2rem;
+      color: #fff;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    section > p {
+      margin: 0 0 1rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .diagram {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 0.75rem;
+      margin: 0.75rem 0;
+      overflow-x: auto;
+    }
+    .diagram .mermaid { text-align: center; }
+    footer {
+      padding: 1.25rem 1.5rem 2rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-align: center;
+      border-top: 1px solid var(--border);
+    }
+    @media print {
+      nav { position: static; }
+      body { background: #fff; color: #111; }
+      header, .diagram { background: #f6f8fc; border-color: #ccc; }
+      section h2 { color: #111; border-color: #ccc; }
+      section > p, header p, footer { color: #444; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>模拟空战 · 架构模型与逻辑图</h1>
+    <p>
+      与仓库 <strong>View → Controller → Model</strong>、联机权威后端、接口先行表述一致；图源答辩手册与实验报告中的 Mermaid，汇总为单页 HTML，需联网加载 Mermaid 脚本以渲染。
+    </p>
+  </header>
+  <nav>
+    <span style="color:var(--muted);font-size:0.85rem;">跳转：</span>
+    <a href="#overall">总览</a>
+    <a href="#local-detail">单机分层（详）</a>
+    <a href="#local-mvc">单机 MVC</a>
+    <a href="#online-flow">联机数据流</a>
+    <a href="#online-seq">联机时序</a>
+    <a href="#threads">线程池与 tick</a>
+    <a href="#interfaces">接口先行</a>
+  </nav>
+  <main>
+    <section id="overall">
+      <h2>1. 系统总览（前端 / 后端 / 数据）</h2>
+      <p>单机仅在浏览器闭环；联机在 Spring 侧权威推算，经 WebSocket 同步快照。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart TB
+  subgraph fe [浏览器 Vue3 + TS]
+    V[Views / Components]
+    C[Controllers]
+    M[game/ Model]
+    R[GameRenderer + Canvas]
+    V --> C
+    C --> M
+    C --> R
+  end
+  subgraph be [Spring Boot 3]
+    REST[REST Auth / Room]
+    WS[WebSocket /ws/game]
+    OGS[OnlineGameService]
+    REST --> OGS
+    WS --> OGS
+  end
+  subgraph data [(MySQL + MyBatis)]
+    DB[(用户 / 房间 / 战报)]
+  end
+  C -->|联机上行| WS
+  WS -->|快照下行| C
+  OGS --> DB
+        </pre>
+      </div>
+    </section>
+
+    <section id="local-detail">
+      <h2>2. 单机数据流（分层详图）</h2>
+      <p>View 消费快照与输入；Controller 持有 rAF 与输入汇聚；Model 无 Vue/DOM 依赖。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart TB
+  subgraph view [View]
+    BC[BattleCanvas.vue]
+    HUD[GameHud.vue]
+  end
+  subgraph ctrl [Controller]
+    LGC[LocalGameController.ts]
+    IC[InputController.ts]
+  end
+  subgraph model [Model]
+    BF[Battlefield.ts]
+    FG[Fighter / Missile 等]
+  end
+  BC --> LGC
+  HUD --> LGC
+  IC --> LGC
+  LGC --> BF
+  BF --> FG
+  LGC --> BC
+        </pre>
+      </div>
+    </section>
+
+    <section id="local-mvc">
+      <h2>3. 单机 MVC 依赖方向</h2>
+      <p>控制器更新模型并向视图提供快照（DTO 式 BattleSnapshot）。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart LR
+  V[View] --> C[Controller]
+  C --> M[Model]
+  C --> V
+        </pre>
+      </div>
+    </section>
+
+    <section id="online-flow">
+      <h2>4. 联机数据流（前后端分工）</h2>
+      <p>命中、胜负、AI、导弹运动以服务端为准；前端呈现与输入采样。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart LR
+  subgraph client [浏览器]
+    OGV[OnlineGameView.vue]
+    OGC[OnlineGameController.ts]
+    WSClient[WebSocket]
+  end
+  subgraph server [Spring Boot]
+    GWH[GameWebSocketHandler]
+    OGS[OnlineGameService]
+    DB[(MySQL)]
+  end
+  OGV --> OGC
+  OGC -->|MSG_PLAYER_INPUT| WSClient
+  WSClient --> GWH
+  GWH --> OGS
+  OGS --> DB
+  OGS -->|MSG_BATTLE_STATUS 等| WSClient
+  WSClient --> OGC
+  OGC --> OGV
+        </pre>
+      </div>
+    </section>
+
+    <section id="online-seq">
+      <h2>5. 联机消息时序（简化）</h2>
+      <p>上行输入 → Handler → Service tick → 广播战场快照。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+sequenceDiagram
+  participant C as Client
+  participant W as GameWebSocketHandler
+  participant S as OnlineGameService
+  C->>W: MSG_PLAYER_INPUT JSON
+  W->>S: handleClientMessage
+  Note over S: tick: move, fire, missiles, hits
+  S->>W: broadcast snapshot
+  W->>C: MSG_BATTLE_STATUS
+        </pre>
+      </div>
+    </section>
+
+    <section id="threads">
+      <h2>6. 后端线程池与 tick 逻辑（OnlineGameService）</h2>
+      <p>单线程调度器触发 dispatch；游戏步进与 AI/碰撞/雷达计算分到两个 ThreadPoolTaskExecutor。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart TB
+  TS["tickScheduler 单线程"]
+  TS --> DT[dispatchTicks]
+  DT --> GTE["gameTaskExecutor"]
+  GTE --> TR["tick 每房间 RoomRuntime"]
+  TR --> CALC["calculationTaskExecutor supplyAsync"]
+  CALC --> AI[buildAiCommands]
+  CALC --> HIT[detectHits]
+  CALC --> RADAR[scanRadarMarks]
+  AI --> SNAP[BattleSnapshot / broadcast]
+  HIT --> SNAP
+  RADAR --> SNAP
+  CFG[ThreadPoolConfig] -.-> GTE
+  CFG -.-> CALC
+        </pre>
+      </div>
+    </section>
+
+    <section id="interfaces">
+      <h2>7. 接口先行（六大接口 · 概念）</h2>
+      <p>前端 interfaces.ts 完整实现类；后端 com.aircombat.game 定义 Java 接口，联机侧 INetworkProtocol 与 JsonNetworkProtocol 接入服务。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart LR
+  subgraph ts [TS interfaces.ts]
+    T6[六大接口契约]
+    TIMPL[Fighter Missile CombatJudger 等实现]
+    T6 --> TIMPL
+  end
+  subgraph java [Java com.aircombat.game]
+    J6[六大接口 Java 版]
+    JP[INetworkProtocol]
+    JJ[JsonNetworkProtocol]
+    J6 -.->|对齐任务书| JP
+    JP --> JJ
+    JJ --> OGS[OnlineGameService]
+  end
+        </pre>
+      </div>
+    </section>
+  </main>
+  <footer>
+    模拟空战课程作业 · 架构图汇总页 · 与 docs/答辩手册_技术栈与架构.md 及实验报告一致 · 本地用浏览器打开本文件即可（需联网加载 CDN）
+  </footer>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#141d33',
+        primaryColor: '#1e3a5f',
+        primaryTextColor: '#e8eef8',
+        primaryBorderColor: '#3d8bfd',
+        lineColor: '#8b9bb8',
+        secondaryColor: '#243556',
+        tertiaryColor: '#0c1222',
+        fontFamily: '"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif'
+      },
+      flowchart: { curve: 'basis', padding: 12 },
+      sequence: { actorMargin: 50, boxMargin: 10 }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { margin: 30px auto; max-width: 1100px; font-family: "Microsoft YaHei", sans-serif; background: #fff; }
+  h2 { text-align: center; margin-bottom: 24px; }
+  .mermaid { text-align: center; }
+  .err { color: #c00; text-align: center; padding: 40px; display: none; }
+</style>
+</head>
+<body>
+<h2>图11：数据库表结构（air_combat 库）</h2>
+<div class="mermaid">
+erDiagram
+    users {
+        BIGINT id PK "自增主键"
+        VARCHAR username UK "50 唯一索引"
+        VARCHAR password_hash "100 BCrypt"
+        VARCHAR nickname "50"
+        BIGINT auth_revision "默认0 单点互踢"
+        TIMESTAMP created_at "默认CURRENT_TIMESTAMP"
+    }
+
+    rooms {
+        BIGINT id PK "自增主键"
+        VARCHAR name "80"
+        BIGINT owner_user_id FK "房主"
+        VARCHAR status "20 WAITING-RUNNING-EXPIRED"
+        INT red_count "默认0"
+        INT blue_count "默认0"
+        TIMESTAMP created_at "默认CURRENT_TIMESTAMP"
+    }
+
+    room_players {
+        BIGINT id PK "自增主键"
+        BIGINT room_id FK "关联rooms"
+        BIGINT user_id FK "关联users"
+        VARCHAR team "10 RED-BLUE"
+        VARCHAR fighter_id "50"
+        TIMESTAMP joined_at "默认CURRENT_TIMESTAMP"
+    }
+
+    battle_records {
+        BIGINT id PK "自增主键"
+        BIGINT room_id FK "关联rooms"
+        VARCHAR mode "20 ONLINE"
+        VARCHAR winner "10 RED-BLUE-DRAW"
+        INT duration_seconds "对局时长"
+        INT red_kills "默认0"
+        INT blue_kills "默认0"
+        LONGTEXT report_json "完整快照JSON"
+        TIMESTAMP created_at "默认CURRENT_TIMESTAMP"
+    }
+
+    battle_player_results {
+        BIGINT id PK "自增主键"
+        BIGINT battle_record_id FK "关联battle_records"
+        BIGINT room_id FK "关联rooms"
+        BIGINT user_id FK "关联users"
+        VARCHAR nickname "50"
+        VARCHAR team "10 RED-BLUE"
+        VARCHAR fighter_model "64 所选机型"
+        INT kills "默认0"
+        INT damage_dealt "默认0"
+        TIMESTAMP created_at "默认CURRENT_TIMESTAMP"
+    }
+
+    users ||--o{ room_players : "user_id"
+    users ||--o{ rooms : "owner_user_id"
+    rooms ||--o{ room_players : "room_id"
+    rooms ||--o{ battle_records : "room_id"
+    battle_records ||--o{ battle_player_results : "battle_record_id"
+</div>
+<div class="err" id="err">图表加载失败，请检查网络连接后刷新页面</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({ startOnLoad: false, theme: 'default' });
+mermaid.run();
+</script>
+</body>
+</html>

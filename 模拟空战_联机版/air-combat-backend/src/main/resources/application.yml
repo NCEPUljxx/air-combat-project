@@ -1,0 +1,29 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: air-combat-backend
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/air_combat?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+    username: root
+    password: 1234
+  sql:
+    init:
+      mode: always
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+air-combat:
+  game:
+    tick-rate: 120
+    max-team-size: 4
+  auth:
+    jwt:
+      # 仅课程项目使用，生产环境请用环境变量注入强密钥
+      secret: AirCombatJwtSecretKeyForCourseProject2026
+      expire-seconds: 86400

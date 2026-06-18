@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>模拟空战 · 单机版 · 架构与 UML 图集</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.5/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a101a;
+      --panel: #121c2e;
+      --text: #e9f0fb;
+      --muted: #8ca0bf;
+      --accent: #4d9dff;
+      --border: #223149;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      font-size: 15px;
+    }
+    header {
+      padding: 2rem 1.5rem 1.25rem;
+      background: linear-gradient(160deg, #0f182a 0%, #0a101a 50%);
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { margin: 0 0 0.4rem; font-size: 1.55rem; font-weight: 650; }
+    header p { margin: 0; color: var(--muted); max-width: 52rem; font-size: 0.93rem; }
+    nav {
+      padding: 0.75rem 1.5rem;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 1rem;
+      align-items: center;
+    }
+    nav span.hint { color: var(--muted); font-size: 0.84rem; }
+    nav a { color: var(--accent); font-size: 0.88rem; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    main {
+      max-width: 58rem;
+      margin: 0 auto;
+      padding: 1.35rem 1.25rem 3rem;
+    }
+    section { margin-bottom: 2.5rem; }
+    section h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1.22rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.45rem;
+    }
+    section > p {
+      margin: 0 0 0.9rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .diagram {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 0.65rem;
+      overflow-x: auto;
+    }
+    .diagram pre.mermaid { margin: 0; text-align: center; font-size: 0.82rem; }
+    footer {
+      padding: 1rem 1.5rem 2rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-align: center;
+      border-top: 1px solid var(--border);
+    }
+    @media print {
+      nav { position: static; }
+      body { background: #fff; color: #111; font-size: 11pt; }
+      header { background: #f4f7fc; }
+      header p, footer, section > p { color: #444; }
+      section h2 { color: #111; border-color: #ccc; }
+      .diagram { background: #f8fafc; border-color: #ccc; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>模拟空战 · <code>模拟空战_单机版/</code> 体系结构与 UML（HTML）</h1>
+    <p>
+      对应单机路径：<strong>Vue 3 + TypeScript + Vite + Canvas</strong>；
+      View → Controller → Model；图示与目录 <code>air-combat-frontend/src/</code> 一致。
+      <strong>需联网</strong> 加载 Mermaid CDN 才能渲染。若打不开，可复制各 <code> ```mermaid </code>
+      块到 <a href="https://mermaid.live" style="color:var(--accent)">mermaid.live</a>。
+    </p>
+  </header>
+  <nav>
+    <span class="hint">跳转 →</span>
+    <a href="#sys-structure">体系结构</a>
+    <a href="#tech-stack">技术架构</a>
+    <a href="#component">组件图</a>
+    <a href="#classes">类图</a>
+    <a href="#states">状态图</a>
+  </nav>
+
+  <main>
+    <!-- 1 体系结构图 -->
+    <section id="sys-structure">
+      <h2>1. 体系结构图（逻辑分层）</h2>
+      <p>单机在浏览器闭环：视图只读写快照；控制器持 <code>requestAnimationFrame</code>；模型无 Vue/DOM。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart TB
+  subgraph browser [Chrome / Edge 运行时]
+    subgraph view [视图层 View]
+      GV[GameView.vue]
+      BC[BattleCanvas.vue]
+      GH[GameHud.vue]
+      GV --- BC
+      GV --- GH
+    end
+
+    subgraph ctrl [控制层 Controller]
+      LGC[LocalGameController]
+      IC[InputController]
+      AUG[augmentInputFireHeading]
+      IC --> LGC
+      AUG --> LGC
+      BC -.->|"canvas-ready → bindCanvas"| LGC
+      LGC -->|"attach(canvas)"| IC
+    end
+
+    subgraph model [模型层 Model]
+      BF[Battlefield]
+      FTR[Fighter Missile Bomb]
+      RJ[CombatJudger RadarSystem SimpleAIController]
+      POOL[ObjectPool]
+      BF --> FTR
+      BF --> RJ
+      BF --> POOL
+    end
+
+    subgraph render [渲染 Rendering]
+      GR[GameRenderer]
+      FPS[fpsCounter]
+      GR --- FPS
+    end
+
+    BC -->|"快照 props"| GR
+    LGC -->|"onFrame BattleSnapshot"| BC
+    LGC -->|"onFrame"| GH
+    LGC --> BF
+    BF -->|"getSnapshot"| LGC
+  end
+      </pre>
+      </div>
+    </section>
+
+    <!-- 2 技术架构图 -->
+    <section id="tech-stack">
+      <h2>2. 技术架构图（技术栈与载体）</h2>
+      <p>工程根 <code>air-combat-frontend/</code>：构建与运行时技术选型。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart LR
+  subgraph ui [界面与绑定]
+    VUE[Vue 3 Composition]
+    VITE[Vite 5 bundler dev]
+    VUE --- VITE
+  end
+
+  subgraph lang [语言与契约]
+    TS[TypeScript]
+    IFC[interfaces.ts 六大接口]
+    TYP[types.ts 快照枚举]
+    TS --- IFC
+    TS --- TYP
+  end
+
+  subgraph gfx [可视化]
+    C2[CanvasRenderingContext2D]
+    BUF[OffscreenCanvas / DOM 离屏缓冲]
+    C2 --- BUF
+  end
+
+  subgraph loop [节拍]
+    RAF[浏览器 requestAnimationFrame]
+  end
+
+  VUE --> C2
+  VUE --> TS
+  TS --> BF_L[Battlefield 推算]
+  BF_L --> RAF
+  RAF --> VUE
+  VITE -.->|"npm run dev / build"| VUE
+      </pre>
+      </div>
+      <p class="muted-note" style="margin-top:.5rem">说明：<code>JsonNetworkProtocol</code>、<code>MessageType</code> 与同仓库联机同源，单机不启 WebSocket。</p>
+    </section>
+
+    <!-- 3 组件图 -->
+    <section id="component">
+      <h2>3. 组件图（源码目录粒度）</h2>
+      <p>按前端包划分「子系统」及各包对外依赖方向（不包含 <code>node_modules</code>）。</p>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart TB
+  subgraph PKG_V [vue-views]
+    GameView.vue
+    Home.vue
+  end
+
+  subgraph PKG_C [vue-components]
+    BattleCanvas.vue
+    GameHud.vue
+  end
+
+  subgraph PKG_CTR [controllers]
+    LocalGameController.ts
+    InputController.ts
+    augmentInputFireHeading.ts
+  end
+
+  subgraph PKG_GAME [game]
+    Battlefield.ts
+    Fighter.ts
+    Missile.ts
+    Bomb.ts
+    CombatJudger.ts
+    RadarSystem.ts
+    SimpleAIController.ts
+    objectPool.ts
+    interfaces.ts
+    types.ts
+    JsonNetworkProtocol.ts
+  end
+
+  subgraph PKG_RD [rendering]
+    GameRenderer.ts
+    fpsCounter.ts
+    fighterShapes.ts
+  end
+
+  subgraph PKG_CONF [shared]
+    battlefieldConfig.ts
+  end
+
+  GameView.vue --> BattleCanvas.vue
+  GameView.vue --> GameHud.vue
+  GameView.vue --> LocalGameController.ts
+
+  BattleCanvas.vue --> GameRenderer.ts
+  BattleCanvas.vue --> fpsCounter.ts
+  BattleCanvas.vue --> battlefieldConfig.ts
+
+  LocalGameController.ts --> Battlefield.ts
+  LocalGameController.ts --> InputController.ts
+  LocalGameController.ts --> augmentInputFireHeading.ts
+
+  Battlefield.ts --> Fighter.ts
+  Battlefield.ts --> Missile.ts
+  Battlefield.ts --> Bomb.ts
+  Battlefield.ts --> CombatJudger.ts
+  Battlefield.ts --> RadarSystem.ts
+  Battlefield.ts --> SimpleAIController.ts
+  Battlefield.ts --> objectPool.ts
+  Battlefield.ts --> battlefieldConfig.ts
+
+  GameRenderer.ts --> fighterShapes.ts
+  GameRenderer.ts --> types.ts
+
+  JsonNetworkProtocol.ts -.->|"联机时使用"| PKG_CTR
+      </pre>
+      </div>
+    </section>
+
+    <!-- 4 类图 -->
+    <section id="classes">
+      <h2>4. 类图（接口与核心类型 · 节选）</h2>
+      <p>
+        展示主要 <code>implements</code> 与聚合关系（类名极简，方法与字段见源码）；
+        若仍不渲染请将下方代码粘贴到 <a href="https://mermaid.live" style="color:var(--accent)">mermaid.live</a> 校验。
+      </p>
+      <div class="diagram">
+        <pre class="mermaid">
+classDiagram
+
+  class Fighter
+  class Missile
+  class Bomb
+  class RadarSystem
+  class CombatJudger
+  class SimpleAIController
+  class JsonNetworkProtocol
+
+  class IFighter
+  class IMissile
+  class IRadarSystem
+  class ICombatJudger
+  class IAIController
+  class INetworkProtocol
+
+  class ObjectPool
+  class Battlefield
+  class LocalGameController
+  class InputController
+  class GameRenderer
+  class BattleSnapshot
+
+  Fighter ..|> IFighter
+  Missile ..|> IMissile
+  RadarSystem ..|> IRadarSystem
+  CombatJudger ..|> ICombatJudger
+  SimpleAIController ..|> IAIController
+  JsonNetworkProtocol ..|> INetworkProtocol
+
+  Battlefield --> Fighter
+  Battlefield --> Missile
+  Battlefield --> Bomb
+  Battlefield --> CombatJudger
+  Battlefield --> RadarSystem
+  Battlefield --> SimpleAIController
+  Battlefield --> ObjectPool
+
+  LocalGameController --> Battlefield
+  LocalGameController --> InputController
+
+  GameRenderer --> BattleSnapshot
+  LocalGameController --> BattleSnapshot
+      </pre>
+      </div>
+      <p>注：<code>Bomb</code> 与本图 <code>ObjectPool Poolable</code> 的配合见 <code>Bomb.ts</code> / <code>objectPool.ts</code>。</p>
+    </section>
+
+    <!-- 5 状态图 BattleStatus -->
+    <section id="states">
+      <h2>5. 状态图（战场 <code>BattleSnapshot.status</code>）</h2>
+      <p>
+        <code>WAITING</code> / <code>DRAW</code> 在<strong>类型与 UI</strong>中存在（联机/归一快照）；
+        单机 <code>Battlefield.reset</code> 后直接进入 <code>RUNNING</code>，终态仅由 <code>CombatJudger.updateBattleStatus</code> 产生。
+      </p>
+      <div class="diagram">
+        <pre class="mermaid">
+stateDiagram-v2
+
+  [*] --> Battling : solo reset enters here
+
+  Battling --> Battling : tick battlefield update
+
+  Battling --> RedWin : blue camp eliminated RED_WIN enum
+
+  Battling --> BlueWin : red camp eliminated BLUE_WIN enum
+
+  Battling --> NeutralFail : simultaneous combat loss FAILED enum
+
+  RedWin --> [*]
+
+  BlueWin --> [*]
+
+  NeutralFail --> [*]
+        </pre>
+      </div>
+      <p style="font-size:0.88rem;color:var(--muted)">
+        图中结点与源码枚举对应：<strong>Battling</strong> → <code>RUNNING</code>；
+        <strong>RedWin</strong> → <code>RED_WIN</code>；
+        <strong>BlueWin</strong> → <code>BLUE_WIN</code>；
+        <strong>NeutralFail</strong> → <code>FAILED</code>。
+        <code>WAITING</code> / <code>DRAW</code> 未画入本图，参见上文说明。
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    单机包路径：<strong>模拟空战_单机版/architecture-diagrams-singleplayer.html</strong><br />
+    Mermaid · 适配实验报告分层与答辩说明 · &copy; 课程作业图示
+  </footer>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "dark",
+      securityLevel: "loose",
+      themeVariables: {
+        darkMode: true,
+        background: "#121c2e",
+        primaryColor: "#1f3f66",
+        primaryTextColor: "#e9f0fb",
+        primaryBorderColor: "#4d9dff",
+        lineColor: "#8ca0bf",
+        secondaryColor: "#223149",
+        tertiaryColor: "#0a101a",
+        fontFamily: '"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif',
+      },
+      flowchart: { curve: "basis", padding: 12, htmlLabels: true },
+      state: { nodeSpacing: 28, rankSpacing: 40 },
+      class: { dividerMargin: 6 },
+    });
+  </script>
+</body>
+</html>
